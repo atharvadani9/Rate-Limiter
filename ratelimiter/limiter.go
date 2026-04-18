@@ -15,14 +15,31 @@ type RateLimiter struct {
 	duration time.Duration
 	mu       sync.RWMutex
 	store    map[string]*window
+	done     chan struct{}
 }
 
 func New(limit int, duration time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		limit:    limit,
 		duration: duration,
 		store:    make(map[string]*window),
+		done:     make(chan struct{}),
 	}
+
+	go func() {
+		ticker := time.NewTicker(duration)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				rl.cleanup()
+			case <-rl.done:
+				return
+			}
+		}
+	}()
+
+	return rl
 }
 
 func (rl *RateLimiter) Allow(key string) bool {
@@ -69,4 +86,19 @@ func (rl *RateLimiter) Status(key string) Status {
 			ResetAt:   time.Now().Add(rl.duration),
 		}
 	}
+}
+
+func (rl *RateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	for key, win := range rl.store {
+		if win.expired(now, rl.duration) {
+			delete(rl.store, key)
+		}
+	}
+}
+
+func (rl *RateLimiter) Stop() {
+	close(rl.done)
 }

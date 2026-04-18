@@ -85,6 +85,33 @@ func TestStatus_ReflectsAllows(t *testing.T) {
 	}
 }
 
+func TestCleanup_RemovesExpiredKeys(t *testing.T) {
+	rl := New(5, 50*time.Millisecond)
+	rl.Allow("key1")
+
+	// wait for window to expire and cleanup to run
+	time.Sleep(120 * time.Millisecond)
+
+	rl.mu.RLock()
+	_, exists := rl.store["key1"]
+	rl.mu.RUnlock()
+
+	if exists {
+		t.Fatal("expired key should have been removed by cleanup")
+	}
+}
+
+func TestStop_StopsCleanupGoroutine(t *testing.T) {
+	rl := New(5, 50*time.Millisecond)
+	rl.Stop()
+	// calling Stop twice should not panic
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatal("Stop() panicked, likely closed done channel twice")
+		}
+	}()
+}
+
 func TestAllow_Concurrent(t *testing.T) {
 	rl := New(100, time.Minute)
 	var wg sync.WaitGroup

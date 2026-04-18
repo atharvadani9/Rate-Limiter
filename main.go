@@ -9,6 +9,7 @@ import (
 
 func main() {
 	rl := ratelimiter.New(3, 5*time.Second)
+	defer rl.Stop()
 
 	fmt.Printf("rate limiter created with limit 3 and window duration 5s\n")
 	allowed := 0
