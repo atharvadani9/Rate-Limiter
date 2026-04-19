@@ -38,10 +38,38 @@ type Status struct {
 }
 ```
 
+## HTTP Middleware
+
+```go
+rl := ratelimiter.New(3, 5*time.Second)
+defer rl.Stop()
+
+mux := http.NewServeMux()
+mux.HandleFunc("/", handler)
+http.ListenAndServe(":8080", rl.Middleware(mux))
+```
+
+Requests must include an `X-API-Key` header. The middleware sets the following headers on every response:
+- `X-RateLimit-Remaining` — requests left in the current window
+- `X-RateLimit-Reset` — unix timestamp of when the window resets
+
+**Testing with curl:**
+```bash
+# valid request
+curl -i -H "X-API-Key: mykey" http://localhost:8080/
+
+# trigger rate limit (runs 4 times)
+for i in {1..4}; do curl -i -H "X-API-Key: mykey" http://localhost:8080/; done
+
+# missing key - returns 401
+curl -i http://localhost:8080/
+```
+
 ## Development
 
 ```bash
 go build ./...
 go test ./...
+go test -race ./...
 go vet ./...
 ```
